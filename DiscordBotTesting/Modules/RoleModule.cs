@@ -1,5 +1,7 @@
-﻿using Discord.Commands;
+﻿using Discord;
+using Discord.Commands;
 using Discord.WebSocket;
+using DiscordBotTesting.Extensions;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -7,11 +9,75 @@ using System.Threading.Tasks;
 
 namespace DiscordBotTesting.Modules
 {
+    [Group("role")]
     public class RoleModule : ModuleBase<SocketCommandContext>
     {
         #region Commands
 
-        [Command("role")]
+        [Group("reaction")]
+        public class ReactionModule : ModuleBase<SocketCommandContext>
+        {
+            [Command]
+            public async Task CreateRoleReaction(params string[] paramList)
+            {
+                // Does this user have the role required to add these embeds?
+                var userIsInRole = ((SocketGuildUser)Context.User).IsInRole("RoleBasedReactions");
+                if (!userIsInRole)
+                {
+                    var thisMessageId = Context.Message.Id;
+                    await Context.Channel.DeleteMessageAsync(thisMessageId);
+                    return;
+                }
+
+                if (paramList.Length == 0 || paramList.Length % 3 != 0)
+                {
+                    await ReplyAsync(ErrorMessages.Role.ReactionArgumentInvalid);
+                    return;
+                }
+
+                var builder = new EmbedBuilder()
+                    .WithTitle("Simple game channel join method")
+                    .WithDescription(
+                        "Reacting with the specific emojis listed here will automatically add you to the corresponding game channels.")
+                    .WithColor(new Color(0xA5D52E));
+                
+                for (int i = 1; i <= paramList.Length / 3; i++)
+                {
+                    var baseIndex = (i - 1) * 3;
+                    var emoji = paramList[baseIndex];
+                    var role = paramList[baseIndex + 1];
+                    var gameName = paramList[baseIndex + 2];
+
+                    builder.AddField($":{emoji}: joins @{role}",
+                        $"Reacting with :{emoji}: will join the game channel for {gameName}");
+                }
+
+                await ReplyAsync(embed: builder.Build());
+                
+            }
+        }
+
+        [Command("list")]
+        public async Task ListAsync()
+        {
+            var roles = ((SocketGuildUser)Context.User).Roles.Select(r => r.Name.Replace("@", ""));
+            await ReplyAsync($"You're a member of these roles: {string.Join(", ", roles)}");
+        }
+
+        [Command("leave")]
+        public async Task LeaveAsync(params string[] paramList)
+        {
+            foreach (var roleToLeave in paramList)
+            {
+                var leaveResult = await LeaveRole(roleToLeave);
+                if (leaveResult.Success == false)
+                {
+                    Console.WriteLine(leaveResult.Message);
+                }
+            }
+        }
+
+        //[Command("role")]
         public async Task RoleAsync(params string[] paramList)
         {
             if (paramList.Length == 0)
@@ -23,8 +89,7 @@ namespace DiscordBotTesting.Modules
             switch (paramList[0])
             {
                 case "list":
-                    var roles = ((SocketGuildUser)Context.User).Roles.Select(r => r.Name.Replace("@", ""));
-                    await ReplyAsync($"You're a member of these roles: {string.Join(", ", roles)}");
+
                     break;
                 case "add":
                     if (paramList.Length != 2)
@@ -48,6 +113,9 @@ namespace DiscordBotTesting.Modules
                         await ReplyAsync(leaveResult.Message);
                     }
                     break;
+                case "reaction":
+                    await HandleRoleReactionEmbed(paramList);
+                    break;
                 default:
                     await ReplyAsync("I have no idea what that command was supposed to do...");
                     break;
@@ -58,11 +126,7 @@ namespace DiscordBotTesting.Modules
 
         #region Properties
 
-        private static List<string> ProtectedRoles = new List<string>
-        {
-            "SomeProtectedRole",
-            "SomeAdminRole"
-        };
+        
 
 
         #endregion
@@ -84,15 +148,15 @@ namespace DiscordBotTesting.Modules
                 };
             }
 
-            // Check whether it's protected (don't let users add themselves to these)
-            if (ProtectedRoles.Any(r => r.ToLower() == roleName))
-            {
-                return new ReturnValue
-                {
-                    Success = false,
-                    Message = "Sorry, you can't automatically add yourself to that role."
-                };
-            }
+            //// Check whether it's protected (don't let users add themselves to these)
+            //if (ProtectedRoles.Any(r => r.ToLower() == roleName))
+            //{
+            //    return new ReturnValue
+            //    {
+            //        Success = false,
+            //        Message = "Sorry, you can't automatically add yourself to that role."
+            //    };
+            //}
 
             // Does it exist?
             var specifiedRole = Context.Guild.Roles.FirstOrDefault(r => r.Name.ToLower() == roleName);
@@ -187,6 +251,49 @@ namespace DiscordBotTesting.Modules
         private bool IsInRole(string roleName)
         {
             return ((SocketGuildUser)Context.User).Roles.Any(r => r.Name.ToLower() == roleName);
+        }
+
+        private async Task HandleRoleReactionEmbed(string[] paramList)
+        {
+            // Does this user have the role required to add these embeds?
+            var userIsInRole = IsInRole("rolebasedreactions");
+            if (!userIsInRole)
+            {
+                var thisMessageId = Context.Message.Id;
+                await Context.Channel.DeleteMessageAsync(thisMessageId);
+                return;
+            }
+
+            if (paramList.Length == 1)
+            {
+                await ReplyAsync(ErrorMessages.Role.ReactionArgumentInvalid);
+                return;
+            }
+
+            // Check the format of each parameter
+            var embedparams = new List<string>();
+            for (int i = 1; i < paramList.Length; i++)
+            {
+                // Format should be emoji,role,gamename
+                var paramArray = paramList[i].Split(",");
+                if (paramArray.Length != 3)
+                {
+                    await ReplyAsync(ErrorMessages.Role.ReactionArgumentInvalid);
+                    return;
+                }
+
+
+                await ReplyAsync($"emoji: '{paramArray[0]}', role: '{paramArray[1]}', game name: '{paramArray[2]}'");
+            }
+
+
+            // rage face
+            //await Context.Message.AddReactionAsync(new Emoji("\U0001f621"));
+        }
+
+        private Embed BuildRoleReactionEmbed(string emoji, string role, string gameName)
+        {
+            return null;
         }
         #endregion
     }

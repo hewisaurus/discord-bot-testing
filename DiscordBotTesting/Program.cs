@@ -8,6 +8,7 @@ using System;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using DiscordBotTesting.Handlers;
 
 namespace DiscordBotTesting
 {
@@ -20,9 +21,14 @@ namespace DiscordBotTesting
         {
             using (var services = ConfigureServices())
             {
+                // var _config = new DiscordSocketConfig { MessageCacheSize = 100 };
                 var client = services.GetRequiredService<DiscordSocketClient>();
+                
 
                 client.Log += LogAsync;
+
+                client.ReactionAdded += ReactionHandler.ClientOnReactionAdded;
+
                 services.GetRequiredService<CommandService>().Log += LogAsync;
 
                 // Get the token from config (appsettings.json)
@@ -36,6 +42,8 @@ namespace DiscordBotTesting
             }
 
         }
+
+        
 
         private Task LogAsync(LogMessage log)
         {
